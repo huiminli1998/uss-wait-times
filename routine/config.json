@@ -1,0 +1,40 @@
+{
+  "_comment": "Backup of the claude.ai cloud routine that produces waits.csv. This is the exact body accepted by the RemoteTrigger API (POST /v1/code/triggers). See ../README.md for how to recreate the routine from this file, and for the three environment/permission settings that are NOT captured here and must be configured by hand.",
+  "_trigger_id": "trig_01No25H7z8uAWyYs5PhTQc4D",
+  "_routine_url": "https://claude.ai/code/routines/trig_01No25H7z8uAWyYs5PhTQc4D",
+  "_backed_up_at": "2026-07-17",
+
+  "name": "USS Battlestar Galactica Wait Times",
+  "cron_expression": "23 2-11 * * *",
+  "enabled": true,
+  "job_config": {
+    "ccr": {
+      "environment_id": "env_019fwezJGJJ2oKV8S2FQhuNt",
+      "session_context": {
+        "model": "claude-sonnet-5",
+        "sources": [
+          {
+            "git_repository": {
+              "url": "https://github.com/huiminli1998/uss-wait-times"
+            }
+          }
+        ],
+        "allowed_tools": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+      },
+      "events": [
+        {
+          "data": {
+            "uuid": "26e329d1-e424-4320-a605-40cfad4f89b6",
+            "session_id": "",
+            "type": "user",
+            "parent_tool_use_id": null,
+            "message": {
+              "role": "user",
+              "content": "Record the current wait times for the two Battlestar Galactica roller coasters at Universal Studios Singapore, and append them to `waits.csv` in the checked-out repo (https://github.com/huiminli1998/uss-wait-times).\n\n## Step 1 — Fetch the data\n\n    curl -s --max-time 30 'https://api.themeparks.wiki/v1/entity/f95d7f76-2024-4510-b799-26e122d0e448/live'\n\nThis domain is on the environment's Custom network allowlist, so it should succeed. The response has a top-level `liveData` array.\n\n## Step 2 — Extract the two rides\n\nFind these two entries in `liveData` by their exact `id`:\n\n- `7b8c7a5b-a4fa-4c74-ac85-6ba72fd653bb` — record as ride `HUMAN`\n- `ccab7e24-6848-4f71-9b2e-459bba5831a0` — record as ride `CYLON`\n\nFor each, read `status`, `queue.STANDBY.waitTime`, and `lastUpdated`.\n\nParse the JSON programmatically (`jq` is installed). Never invent, estimate, or eyeball a wait time — only record a number you actually parsed out of the response.\n\nIMPORTANT: when a ride is closed or under refurbishment, `queue` or `queue.STANDBY.waitTime` may be missing or null. That is normal — leave `wait_time` EMPTY in the CSV and keep the real `status` value. Do not treat it as an error and do not skip the run.\n\n## Step 3 — Append to waits.csv\n\n`waits.csv` already exists in the repo with this header:\n\n    fetched_at_sgt,ride,status,wait_time,last_updated\n\nAppend exactly two rows — HUMAN first, then CYLON. Compute `fetched_at_sgt` yourself with `date` (Singapore is UTC+8) and use the SAME timestamp for both rows of this run, so the pair can be grouped later:\n\n    2026-07-16T14:23:00+08:00,HUMAN,OPERATING,100,2026-07-16T06:19:16.647Z\n    2026-07-16T14:23:00+08:00,CYLON,OPERATING,80,2026-07-16T06:16:46.682Z\n\nThose values are an EXAMPLE of the shape only — use the real values you fetched. A closed ride looks like:\n\n    2026-07-16T14:23:00+08:00,CYLON,CLOSED,,2026-07-16T06:16:46.682Z\n\nEnsure the file ends with a trailing newline, and never rewrite or reorder existing rows — append only.\n\n## Step 4 — Commit and push\n\n    git add waits.csv\n    git -c user.name='USS Wait Times Routine' -c user.email='noreply@anthropic.com' commit -m 'waits: <SGT timestamp> — HUMAN <n>, CYLON <n>'\n    git push origin HEAD:main\n\nIf the push is rejected as non-fast-forward, run `git pull --rebase origin main` and push again.\n\n## Step 5 — Report\n\nOutput one line: the SGT timestamp, HUMAN wait + status, CYLON wait + status, and the pushed commit SHA.\n\n## On failure\n\nIf the curl fails, returns non-JSON, or neither ride id is present, STILL append two rows for this run with status `FETCH_ERROR`, empty `wait_time`, empty `last_updated`:\n\n    2026-07-16T14:23:00+08:00,HUMAN,FETCH_ERROR,,\n    2026-07-16T14:23:00+08:00,CYLON,FETCH_ERROR,,\n\nCommit with message `waits: <SGT timestamp> — FETCH_ERROR (<exact reason, e.g. HTTP status or proxy error text>)` and push.\n\nDo NOT fall back to WebFetch or any other tool to work around a fetch failure. A loud, visible FETCH_ERROR row is the correct outcome — a wrong number recorded as if it were real is far worse than a recorded gap. Never exit silently without recording the run."
+            }
+          }
+        }
+      ]
+    }
+  }
+}
